@@ -11,7 +11,7 @@ debug="yes"
 # FQDN of the pfSense box, and assumes you have a trust via SSH keys with it.
 fwHost="pfsense.mydomain.tld"
 #
-# location of the file to be analysed (typically /var/log/mail or /var/log/snort/<interfacename>)
+# location of the file to be analysed (typically /var/log/snort/<interfacename>)
 AlertLogPath="/var/log/snort/snort_pppoe040096"
 #
 # Snort logfile name on the pfSense box
