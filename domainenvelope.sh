@@ -1,44 +1,38 @@
 #!/bin/sh
-# Script to extract offending ip's from pfSense's snort alert log which are performing portscans
-#
+# Script to extract offending ip's from mail(log) which try to send as my domain
+
 ################################################################
 # Global definitions for the script - change to fit your needs #
 ################################################################
 
 # Debug switch , set to yes  for verbose info, else the script will be silent.
 debug="yes"
-#
-# FQDN of the pfSense box, and assumes you have a trust via SSH keys with it.
-fwHost="pfsense.mydomain.tld"
-#
-# location of the file to be analysed (typically /var/log/mail or /var/log/snort/<interfacename>)
-AlertLogPath="/var/log/snort/snort_pppoe040096"
-#
-# Snort logfile name on the pfSense box
-AlertLogFile="alert"
-#
+
+# location of the file to be analysed ( typical /var/log/mail or /var/log/maillog)
+MailLogfile="/var/log/mail"
+
 # location of the file to write the results to (no trailing slash)
 ResultFilePath="/root"
-#
+
 # Filename of the resultfile - this will need to be configured in pfBlocker lateron
-ResultFileName="firewall-portscans.txt"
-#
-# The following part assumes there is a trust between this server and the serving host
-# transfer the final file to a webhost
+ResultFileName="domain-envelope.txt"
+
+# The following part assumes there is a trust between the mailserver and the serving host for usage in pfSense
+# transfer the final file to a webhost 
 TransferResult="yes"
-#
+
 # Remote webserver FQDN for transferring it
-RemoteServer="mywebserver.mydomain.tld"
-#
+RemoteServer="<fqdn-of-webserver-host>"
+
 # remote directory-path on the webserver ( no trailing slash !)
-RemotePath="/var/www/html/mypath"
-#
-# remote filename (only populate it when remote file should be named different from the source-filename)
+RemotePath="/your/remote/path/that/serves/the/resultfile"
+
+# remote filename (if it should be different from the source-filename)
 RemoteFileName=""
-#
+
 # remote username to use to transfer files
 RemoteUser="root"
-#
+
 #########################################################################
 # DO NOT CHANGE BELOW UNLESS YOU ARE EXACTLY KNOW WHAT YOU ARE DOING    #
 #########################################################################
@@ -51,7 +45,6 @@ if [ ! -d "$ResultFilePath" ]; then
     mkdir -p $ResultFilePath
     PreAddCount=0
 else
-
 # if file is found read the number of entries
     if [ $debug == "yes" ];  then
         printf "Defined resultfile-directory $ResultFilePath was found...Proceeding\n"
@@ -69,36 +62,16 @@ else
     fi
 fi
 
-# Cleanup possible previous remaining alert file
-if [ -f "$AlertLogFile" ]; then
-    if [ $debug == "yes" ];  then
-        printf "Previously retrieved $AlertLogFile found...Deleting.\n"
-    fi
-    rm -f $AlertLogFile
-fi
-
-# retrieve latest alert logfile from the firewall box
-if [ $debug == "yes" ];  then
-    echo "Command to be executed is: scp $RemoteUser@$fwHost:$AlertLogPath/$AlertLogFile" "$ResultFilePath/$AlertLogFile"
-fi
-
-# execute the filetransfer via scp
-scp $RemoteUser@$fwHost:$AlertLogPath/$AlertLogFile $ResultFilePath/$AlertLogFile
-
-# store exit status of scp
-status=$?
-
-# Check outcome of scp transfer, if not zero report and exit.
-if test $status -ne 0 ; then
-    printf "Transfer of file $AlertLogPath/$AlertLogFile has generated an error: [$status] ... Aborting \n"
+# Check existance of sourcefile, if not there report and exit.
+if [ ! -f "$MailLogfile" ]; then
+    printf "Defined sourcefile $MailLogfile was not found ... Aborting \n"
     exit;
 else
 # If it exists read the file for SASL login failures
     if [ $debug == "yes" ];  then
-        printf "Analysing input file $ResultFilePath/$AlertLogFile ... \n"
+        printf "Analysing input file $MailLogfile ... \n"
     fi
-    ipResults=$(cat "$ResultFilePath/$AlertLogFile" | grep -i ',Attempted Information Leak,' | awk -F "," '{print $7}'|sort --unique )
-
+    ipResults=$(cat $MailLogfile | grep -i 'Do not use my domain in your envelope sender' | awk '{print $8}'|grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}"|sort --unique )
 # check result after reading file, if no matches were found exit
     if [[ -z "$ipResults" ]]; then
         if [ $debug == "yes" ];  then
@@ -123,7 +96,7 @@ else
         if [ $debug == "yes" ];  then
             printf "$(($PostAddCount-$PreAddCount)) Unique IP's were added this run. \n"
         fi
-# send resultfile to webhost
+# send resultfile to webhost    
         if [ $(($PostAddCount-$PreAddCount)) == 0 ]; then
             if [ $debug == "yes" ];  then
                 printf "No changes were found from previous run, not sending resultfile to remote. \n"
@@ -145,3 +118,4 @@ else
         fi
     fi
 fi
+
